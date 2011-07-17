@@ -1,8 +1,12 @@
 package com.spaceprogram.simplejpa;
 
-import com.amazonaws.services.simpledb.model.Attribute;
-import com.spaceprogram.simplejpa.query.QueryImpl;
-import net.sf.cglib.proxy.Enhancer;
+import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.logging.Logger;
 
 import javax.persistence.EnumType;
 import javax.persistence.Enumerated;
@@ -12,12 +16,11 @@ import javax.persistence.ManyToOne;
 import javax.persistence.OneToMany;
 import javax.persistence.OrderBy;
 import javax.persistence.PersistenceException;
-import java.lang.reflect.Method;
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
-import java.util.Collection;
-import java.util.List;
-import java.util.logging.Logger;
+
+import net.sf.cglib.proxy.Enhancer;
+
+import com.amazonaws.services.simpledb.model.Attribute;
+import com.spaceprogram.simplejpa.query.QueryImpl;
 
 /**
  * User: treeder
@@ -129,9 +132,24 @@ public class ObjectBuilder {
                     setter.invoke(newInstance, id);
                 }
                 else {
-                    String val = getValueToSet(atts, attName, columnName);
+                	
+                	// for multiple attribute by ms2
+                	List<String> multi = new ArrayList<String>();
+                    String val = getValueToSet(atts, attName, columnName, multi);
                     if (val != null) {
-                        em.setFieldValue(tClass, newInstance, getter, val);
+
+                    	// for multiple attribute by ms2
+                    	if(Collection.class.isAssignableFrom(getter.getReturnType())){
+                        	Class retType = getter.getReturnType();
+                        	String setterName = em.getSetterNameFromGetter(getter);
+                            Method setter = tClass.getMethod(setterName, retType);
+                            setter.invoke(newInstance, new Object[]{
+                            	multi	
+                            });
+                    	}
+                    	else{
+                            em.setFieldValue(tClass, newInstance, getter, val);
+                    	}
                     }
                 }
             }
@@ -175,6 +193,21 @@ public class ObjectBuilder {
         return null;
     }
 
+    private static String getValueToSet(List<Attribute> atts, String propertyName, String columnName, List<String> multi) {
+        if(columnName != null) propertyName = columnName;
+        
+        for (Attribute att : atts) {
+            String attName = att.getName();
+            if (attName.equals(propertyName)) {
+                String val = att.getValue();
+                multi.add(val);
+            }
+        }
+        
+        if(multi.isEmpty()) return null;
+        return multi.get(0);
+    }
+    
 
     private static QueryImpl oneToManyQuery(EntityManagerSimpleJPA em, String attName, String foreignKeyFieldName, Object id, Class typeInList, OrderBy orderBy) {
         if (foreignKeyFieldName == null || foreignKeyFieldName.length() == 0) {

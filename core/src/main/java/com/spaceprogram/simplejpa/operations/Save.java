@@ -199,9 +199,19 @@ public class Save implements Callable {
             	continue;
             }
             else {
-                String toSet = ob != null ? em.padOrConvertIfRequired(ob) : "";
-                // todo: throw an exception if this is going to exceed maximum size, suggest using @Lob
-                attsToPut.add(new ReplaceableAttribute(columnName, toSet, true));
+            	if(ob instanceof Collection){
+            		
+            		Collection<String> cols = (Collection<String>)ob;
+            		for(String value: cols){
+                        attsToPut.add(new ReplaceableAttribute(columnName, value, true));
+            		}
+            	}
+            	else{
+                    String toSet = ob != null ? em.padOrConvertIfRequired(ob) : "";
+                    // todo: throw an exception if this is going to exceed maximum size, suggest using @Lob
+                    attsToPut.add(new ReplaceableAttribute(columnName, toSet, true));
+            	}
+            	
             }
         }
 
