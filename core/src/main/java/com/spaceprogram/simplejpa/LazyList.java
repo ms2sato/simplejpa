@@ -36,6 +36,7 @@ public class LazyList<E> extends AbstractList<E> implements Serializable {
     private int count = -1;
     private String realQuery;
     private String domainName;
+    private int firstResult = -1;
     private int maxResults = -1;
     private int maxResultsPerToken = QueryImpl.MAX_RESULTS_PER_REQUEST;
     private boolean consistentRead = true;
@@ -44,6 +45,7 @@ public class LazyList<E> extends AbstractList<E> implements Serializable {
         this.em = em;
         this.genericReturnType = tClass;
         this.origQuery = query;
+        this.firstResult = query.getFirstResult();
         this.maxResults = query.getMaxResults();
         this.consistentRead = query.isConsistentRead();
         AnnotationInfo ai = em.getAnnotationManager().getAnnotationInfo(genericReturnType);
@@ -138,6 +140,9 @@ public class LazyList<E> extends AbstractList<E> implements Serializable {
 
         if (backingList == null) {
             backingList = new GrowthList();
+            if (firstResult > 0) {
+                skipToFirstResult();
+            }
         }
 
         while (backingList.size() <= index) {
@@ -174,6 +179,23 @@ public class LazyList<E> extends AbstractList<E> implements Serializable {
             }
         }
 
+    }
+
+    private void skipToFirstResult() {
+      try {
+          JPAQuery queryClone = (JPAQuery) origQuery.getQ().clone();
+          queryClone.setResult("count(*)");
+          QueryImpl query = new QueryImpl(em, queryClone);
+          query.setParameters(origQuery.getParameters());
+          query.setForeignIds(origQuery.getForeignIds());
+          
+          String limitQuery = query.createAmazonQuery(false).getValue() + " limit " + firstResult;
+          
+          SelectResult qr = DomainHelper.selectItems(this.em.getSimpleDb(), limitQuery, nextToken, isConsistentRead());
+          nextToken = qr.getNextToken();
+      } catch (CloneNotSupportedException e) {
+          throw new PersistenceException("Query failed: Domain=" + domainName + " -> " + origQuery, e);
+      }
     }
 
     private boolean noLimit() {

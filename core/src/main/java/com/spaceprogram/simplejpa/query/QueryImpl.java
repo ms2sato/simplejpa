@@ -76,6 +76,7 @@ public class QueryImpl implements SimpleQuery {
 
     private Map<String, Object> parameters = new HashMap<String, Object>();
     public static String conditionRegex = "(<>)|(>=)|(<=)|=|>|<|\\band\\b|\\bor\\b|\\bis\\b|\\blike\\b";
+    private int firstResult = -1;
     private int maxResults = -1;
     private String qString;
     private Class tClass;
@@ -244,11 +245,19 @@ public class QueryImpl implements SimpleQuery {
         sb.append(" ");
         sb.append("IN");
         sb.append(" (");
-        for(int i = 0; i < params.size(); i++){
-            if(i != 0){
+        boolean quoteParam = true;
+        int i = 0;
+        for (String param : params) {
+            if (i > 0) {
                 sb.append(",");
             }
-            sb.append("'").append(params.get(i)).append("'");
+            if (quoteParam) {
+                sb.append("'");
+            }
+            sb.append(param);
+            if (quoteParam) {
+                sb.append("'");
+            }
         }
         sb.append(")");
     }
@@ -344,6 +353,10 @@ public class QueryImpl implements SimpleQuery {
         return foreignIds;
     }
 
+    public int getFirstResult() {
+        return firstResult;
+    }
+
     public int getMaxResults() {
         return maxResults;
     }
@@ -393,7 +406,9 @@ public class QueryImpl implements SimpleQuery {
                 param = AmazonSimpleDBUtil.encodeDate(x);
             } else { // string
                 param = EscapeUtils.escapeQueryParam(paramOb.toString());
-                //amazon now supports like queries starting with %
+                if (param.startsWith("%")) {
+                    throw new PersistenceException("SimpleDB only supports a wildcard query on the right side of the value (ie: starts-with).");
+                }
             }
         }
         return "'" + param + "'";
@@ -432,6 +447,14 @@ public class QueryImpl implements SimpleQuery {
                 String nextToken = null;
                 SelectResult qr;
                 long count = 0;
+
+                // Skip to the first result
+                if (firstResult > 0) {
+                    String limitQuery = createAmazonQuery(false).getValue() + " limit " + firstResult;
+                    
+                    qr = DomainHelper.selectItems(this.em.getSimpleDb(), limitQuery, nextToken, isConsistentRead());
+                    nextToken = qr.getNextToken();
+                }
 
                 while ((qr = DomainHelper.selectItems(this.em.getSimpleDb(), amazonQuery.getValue(), nextToken)) != null) {
                     Map<String, List<Attribute>> itemMap = new HashMap<String, List<Attribute>>();
@@ -525,8 +548,9 @@ public class QueryImpl implements SimpleQuery {
         return this;
     }
 
-    public Query setFirstResult(int i) {
-        throw new NotImplementedException("TODO");
+    public Query setFirstResult(int firstResult) {
+        this.firstResult = firstResult;
+        return this;
     }
 
     public Query setFlushMode(FlushModeType flushModeType) {
