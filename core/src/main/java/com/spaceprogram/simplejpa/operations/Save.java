@@ -1,19 +1,20 @@
 package com.spaceprogram.simplejpa.operations;
 
-import com.amazonaws.AmazonClientException;
-import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.simpledb.model.Attribute;
-import com.amazonaws.services.simpledb.model.DeleteAttributesRequest;
-import com.amazonaws.services.simpledb.model.Item;
-import com.amazonaws.services.simpledb.model.PutAttributesRequest;
-import com.amazonaws.services.simpledb.model.ReplaceableAttribute;
-import com.spaceprogram.simplejpa.AnnotationInfo;
-import com.spaceprogram.simplejpa.DomainHelper;
-import com.spaceprogram.simplejpa.EntityManagerFactoryImpl;
-import com.spaceprogram.simplejpa.EntityManagerSimpleJPA;
-import com.spaceprogram.simplejpa.LazyInterceptor;
-import com.spaceprogram.simplejpa.NamingHelper;
-import net.sf.cglib.proxy.Factory;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.ObjectOutputStream;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import javax.persistence.EnumType;
 import javax.persistence.Enumerated;
@@ -26,77 +27,77 @@ import javax.persistence.PostPersist;
 import javax.persistence.PostUpdate;
 import javax.persistence.PrePersist;
 import javax.persistence.PreUpdate;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.ObjectOutputStream;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.UUID;
-import java.util.concurrent.Callable;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+
+import net.sf.cglib.proxy.Factory;
+
+import com.amazonaws.AmazonClientException;
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.simpledb.model.Attribute;
+import com.amazonaws.services.simpledb.model.DeleteAttributesRequest;
+import com.amazonaws.services.simpledb.model.PutAttributesRequest;
+import com.amazonaws.services.simpledb.model.ReplaceableAttribute;
+import com.spaceprogram.simplejpa.AnnotationInfo;
+import com.spaceprogram.simplejpa.EntityManagerFactoryImpl;
+import com.spaceprogram.simplejpa.EntityManagerSimpleJPA;
+import com.spaceprogram.simplejpa.LazyInterceptor;
+import com.spaceprogram.simplejpa.NamingHelper;
 
 /**
- * User: treeder
- * Date: Apr 1, 2008
- * Time: 11:51:16 AM
+ * User: treeder Date: Apr 1, 2008 Time: 11:51:16 AM
  */
 public class Save implements Callable {
-    private static Logger logger = Logger.getLogger(Save.class.getName());
+	private static Logger logger = Logger.getLogger(Save.class.getName());
 
-    private EntityManagerSimpleJPA em;
-    private Object o;
-    private String id;
-    private boolean newObject;
+	private EntityManagerSimpleJPA em;
+	private Object o;
+	private String id;
+	private boolean newObject;
 
-    public Save(EntityManagerSimpleJPA entityManager, Object o) {
-        this.em = entityManager;
-        this.o = o;
-        long start = System.currentTimeMillis();
-        id = prePersist(o);
-        if(logger.isLoggable(Level.FINE)) logger.fine("prePersist time=" + (System.currentTimeMillis() - start));
+	public Save(EntityManagerSimpleJPA entityManager, Object o) {
+		this.em = entityManager;
+		this.o = o;
+		long start = System.currentTimeMillis();
+		id = prePersist(o);
+		if (logger.isLoggable(Level.FINE))
+			logger.fine("prePersist time="
+					+ (System.currentTimeMillis() - start));
 
-    }
+	}
 
-    /**
-     * Checks that object is an entity and assigns an ID.
-     *
-     * @param o
-     * @return
-     */
-    private String prePersist(Object o) {
-        em.checkEntity(o);
-        // create id if required
-        String id = em.getId(o);
-        if (id == null) {
-            newObject = true;
-            id = UUID.randomUUID().toString();
-//            System.out.println("new object, setting id");
-            AnnotationInfo ai = em.getFactory().getAnnotationManager().getAnnotationInfo(o);
-            em.setFieldValue(o.getClass(), o, ai.getIdMethod(), id);
-        }
-        em.cachePut(id, o);
-        return id;
-    }
+	/**
+	 * Checks that object is an entity and assigns an ID.
+	 * 
+	 * @param o
+	 * @return
+	 */
+	private String prePersist(Object o) {
+		em.checkEntity(o);
+		// create id if required
+		String id = em.getId(o);
+		if (id == null) {
+			newObject = true;
+			id = UUID.randomUUID().toString();
+			// System.out.println("new object, setting id");
+			AnnotationInfo ai = em.getFactory().getAnnotationManager()
+					.getAnnotationInfo(o);
+			em.setFieldValue(o.getClass(), o, ai.getIdMethod(), id);
+		}
+		em.cachePut(id, o);
+		return id;
+	}
 
+	public Object call() throws Exception {
+		try {
+			persistOnly(o, id);
+		} catch (Exception e) {
+			e.printStackTrace();
+			System.out.println("CAUGHT AND RETHROWING");
+			throw e;
+		}
+		return o;
+	}
 
-    public Object call() throws Exception {
-        try {
-            persistOnly(o, id);
-        } catch (Exception e) {
-            e.printStackTrace();
-            System.out.println("CAUGHT AND RETHROWING");
-            throw e;
-        }
-        return o;
-    }
-
-    protected void persistOnly(Object o, String id) throws AmazonClientException, IllegalAccessException, InvocationTargetException, IOException {
+	protected void persistOnly(Object o, String id) throws AmazonClientException, IllegalAccessException, InvocationTargetException, IOException {
         long start = System.currentTimeMillis();
         em.invokeEntityListener(o, newObject ? PrePersist.class : PreUpdate.class);
         AnnotationInfo ai = em.getFactory().getAnnotationManager().getAnnotationInfo(o);
@@ -199,11 +200,17 @@ public class Save implements Callable {
             	continue;
             }
             else {
+            	
+            	// for multiple attribute by ms2
             	if(ob instanceof Collection){
             		
-            		Collection<String> cols = (Collection<String>)ob;
-            		for(String value: cols){
-                        attsToPut.add(new ReplaceableAttribute(columnName, value, true));
+            		Collection<?> cols = (Collection<?>)ob;
+            		for(Iterator<?> itr = cols.iterator(); itr.hasNext();){
+            			Object nex = itr.next();
+            			if(nex instanceof String){
+                			String value = (String)nex;
+                                attsToPut.add(new ReplaceableAttribute(columnName, value, true));
+            			}
             		}
             	}
             	else{
@@ -279,6 +286,5 @@ public class Save implements Callable {
         em.invokeEntityListener(o, newObject ? PostPersist.class : PostUpdate.class);
         if(logger.isLoggable(Level.FINE)) logger.fine("persistOnly time=" + (System.currentTimeMillis() - start));
     }
-
 
 }

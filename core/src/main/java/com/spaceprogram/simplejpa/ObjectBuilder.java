@@ -5,7 +5,9 @@ import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.logging.Logger;
 
 import javax.persistence.EnumType;
@@ -132,25 +134,33 @@ public class ObjectBuilder {
                     setter.invoke(newInstance, id);
                 }
                 else {
-                	
                 	// for multiple attribute by ms2
-                	List<String> multi = new ArrayList<String>();
-                    String val = getValueToSet(atts, attName, columnName, multi);
-                    if (val != null) {
-
-                    	// for multiple attribute by ms2
-                    	if(Collection.class.isAssignableFrom(getter.getReturnType())){
-                        	Class retType = getter.getReturnType();
+                	Class retType = getter.getReturnType();
+                	if(Collection.class.isAssignableFrom(retType)){
+                		Collection<String> multi;
+                		if(List.class.isAssignableFrom(retType)){
+                			multi = new ArrayList<String>();	
+                		}else if(Set.class.isAssignableFrom(retType)){
+                			multi = new HashSet<String>();
+                		}else{
+                			throw new PersistenceException("Not suppported multiple type: " + retType.getName());
+                		}
+	                	
+	                    String val = getValueToSet(atts, attName, columnName, multi);
+	                    if (val != null) {
                         	String setterName = em.getSetterNameFromGetter(getter);
                             Method setter = tClass.getMethod(setterName, retType);
                             setter.invoke(newInstance, new Object[]{
                             	multi	
                             });
                     	}
-                    	else{
+                    }else{
+                    	String val = getValueToSet(atts, attName, columnName);
+                        if (val != null) {
                             em.setFieldValue(tClass, newInstance, getter, val);
-                    	}
+                        }
                     }
+                	
                 }
             }
         } catch (Exception e) {
@@ -193,19 +203,21 @@ public class ObjectBuilder {
         return null;
     }
 
-    private static String getValueToSet(List<Attribute> atts, String propertyName, String columnName, List<String> multi) {
+    private static String getValueToSet(List<Attribute> atts, String propertyName, String columnName, Collection<String> multi) {
+    	String res = null;
         if(columnName != null) propertyName = columnName;
-        
         for (Attribute att : atts) {
             String attName = att.getName();
             if (attName.equals(propertyName)) {
                 String val = att.getValue();
                 multi.add(val);
+                
+                if(res == null) res = val;
             }
         }
         
         if(multi.isEmpty()) return null;
-        return multi.get(0);
+        return res;
     }
     
 
