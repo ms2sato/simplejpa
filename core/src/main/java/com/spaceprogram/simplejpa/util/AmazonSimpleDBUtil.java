@@ -26,6 +26,7 @@ import java.math.BigDecimal;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.TimeZone; //by ms2
 
 /**
  * Provides collection of static functions for conversion of various values into strings that may be
@@ -224,6 +225,11 @@ public class AmazonSimpleDBUtil {
         return (tempVal.divide(shiftMultiplier));
     }
     
+	//by ms2
+	private static TimeZone timezone = TimeZone.getDefault();
+	public static void setTimeZone(TimeZone value){
+		timezone = value;
+	}
 
     /**
      * Encodes date value into string format that can be compared lexicographically
@@ -233,6 +239,7 @@ public class AmazonSimpleDBUtil {
      */
     public static String encodeDate(Date date) {
         SimpleDateFormat dateFormatter = new SimpleDateFormat(dateFormat);
+        dateFormatter.setTimeZone(timezone); //by ms2
         /* Java doesn't handle ISO8601 nicely: need to add ':' manually */
         String result = dateFormatter.format(date);
         return result.substring(0, result.length() - 2) + ":" + result.substring(result.length() - 2);
@@ -247,6 +254,7 @@ public class AmazonSimpleDBUtil {
     public static Date decodeDate(String value) throws ParseException {
         String javaValue = value.substring(0, value.length() - 3) + value.substring(value.length() - 2);
         SimpleDateFormat dateFormatter = new SimpleDateFormat(dateFormat);
+    	dateFormatter.setTimeZone(timezone); //by ms2
         return dateFormatter.parse(javaValue);
     }
 
