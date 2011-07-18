@@ -127,6 +127,9 @@ public class Save implements Callable {
             interceptor = (LazyInterceptor) factory.getCallback(0);
         }
 
+        // for empty collection removing by ms2
+        List<Attribute> colAttsToDelete = new ArrayList<Attribute>();
+        
         Collection<Method> getters = ai.getGetters();
         for (Method getter : getters) {
         	Object ob;
@@ -205,12 +208,19 @@ public class Save implements Callable {
             	if(ob instanceof Collection){
             		
             		Collection<?> cols = (Collection<?>)ob;
-            		for(Iterator<?> itr = cols.iterator(); itr.hasNext();){
-            			Object nex = itr.next();
-            			if(nex instanceof String){
-                			String value = (String)nex;
-                                attsToPut.add(new ReplaceableAttribute(columnName, value, true));
-            			}
+            		if(cols.isEmpty()){
+            			// applied after one of below
+            			colAttsToDelete.add(new Attribute(columnName, null));
+            			attsToDelete.add(new Attribute(columnName, null));
+            		}
+            		else{
+                		for(Iterator<?> itr = cols.iterator(); itr.hasNext();){
+                			Object nex = itr.next();
+                			if(nex instanceof String){
+                    			String value = (String)nex;
+                                    attsToPut.add(new ReplaceableAttribute(columnName, value, true));
+                			}
+                		}
             		}
             	}
             	else{
@@ -242,13 +252,18 @@ public class Save implements Callable {
         AND don't delete if no nulls were set (nulledField on LazyInterceptor)
         */
         if (interceptor != null) {
-            if (interceptor.getNulledFields() != null && interceptor.getNulledFields().size() > 0) {
-                List<Attribute> attsToDelete2 = new ArrayList<Attribute>();
+
+            List<Attribute> attsToDelete2 = new ArrayList<Attribute>(colAttsToDelete);
+
+        	if (interceptor.getNulledFields() != null && interceptor.getNulledFields().size() > 0) {
                 for (String s : interceptor.getNulledFields().keySet()) {
                     Method getter = ai.getGetter(s);
                     String columnName = NamingHelper.getColumnName(getter);
                     attsToDelete2.add(new Attribute(columnName, null));
                 }
+        	}
+        	
+        	if(!attsToDelete2.isEmpty()){
                 start2 = System.currentTimeMillis();
                 this.em.getSimpleDb().deleteAttributes(new DeleteAttributesRequest()
                 	.withDomainName(domainName)
