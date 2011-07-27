@@ -187,27 +187,29 @@ public class EntityManagerFactoryImpl implements EntityManagerFactory {
 
     private void createClients() {
         AWSCredentials awsCredentials = null;
-        InputStream credentialsFile = getClass().getClassLoader().getResourceAsStream("AwsCredentials.properties");
-        if (credentialsFile != null) {
-            logger.info("Loading credentials from AwsCredentials.properties");
-            try {
-                awsCredentials = new PropertiesCredentials(credentialsFile);
-            } catch (IOException e) {
-                throw new PersistenceException("Failed loading credentials from AwsCredentials.properties.", e);
-            }
-        } else {
-            logger.info("Loading credentials from simplejpa.properties");
-            String awsAccessKey = (String) this.props.get(AWSACCESS_KEY_PROP_NAME);
-            String awsSecretKey = (String) this.props.get(AWSSECRET_KEY_PROP_NAME);
-            if (awsAccessKey == null || awsAccessKey.length() == 0) {
-                throw new PersistenceException("AWS Access Key not found. It is a required property.");
-            }
-            if (awsSecretKey == null || awsSecretKey.length() == 0) {
-                throw new PersistenceException("AWS Secret Key not found. It is a required property.");
-            }
 
+    	// loading policy change for overwriting by AWS Configuration by ms2
+        String awsAccessKey = (String) this.props.get(AWSACCESS_KEY_PROP_NAME);
+        String awsSecretKey = (String) this.props.get(AWSSECRET_KEY_PROP_NAME);
+
+    	if(awsAccessKey != null && awsAccessKey.length() != 0 && awsSecretKey != null && awsSecretKey.length() != 0){
+            logger.info("Loading credentials from simplejpa.properties");
             awsCredentials = new BasicAWSCredentials(awsAccessKey, awsSecretKey);
-        }
+    	}
+    	else{
+	    	InputStream credentialsFile = getClass().getClassLoader().getResourceAsStream("AwsCredentials.properties");
+	        if (credentialsFile != null) {
+	            logger.info("Loading credentials from AwsCredentials.properties");
+	            try {
+	                awsCredentials = new PropertiesCredentials(credentialsFile);
+	            } catch (IOException e) {
+	                throw new PersistenceException("Failed loading credentials from AwsCredentials.properties.", e);
+	            }
+	        } else {
+	        	throw new IllegalStateException("Failed to found AwsCredentials.properties and not specified properties");
+	        }
+    	}
+    	
 
         this.simpleDbClient = new AmazonSimpleDBClient(awsCredentials, createConfiguration(sdbSecure));
         this.simpleDbClient.setEndpoint(sdbEndpoint);
