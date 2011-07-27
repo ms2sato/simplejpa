@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.logging.Level;
@@ -205,7 +206,7 @@ public class Save implements Callable {
             else {
             	
             	// for multiple attribute by ms2
-            	if(ob instanceof Collection){
+            	if(ob instanceof Set){
             		
             		Collection<?> cols = (Collection<?>)ob;
             		if(cols.isEmpty()){

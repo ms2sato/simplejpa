@@ -136,15 +136,8 @@ public class ObjectBuilder {
                 else {
                 	// for multiple attribute by ms2
                 	Class retType = getter.getReturnType();
-                	if(Collection.class.isAssignableFrom(retType)){
-                		Collection<String> multi;
-                		if(List.class.isAssignableFrom(retType)){
-                			multi = new ArrayList<String>();	
-                		}else if(Set.class.isAssignableFrom(retType)){
-                			multi = new HashSet<String>();
-                		}else{
-                			throw new PersistenceException("Not suppported multiple type: " + retType.getName());
-                		}
+                	if(Set.class.isAssignableFrom(retType)){
+               			Set<String> multi = new HashSet<String>();
 	                	
 	                    String val = getValueToSet(atts, attName, columnName, multi);
 	                    if (val != null) {
